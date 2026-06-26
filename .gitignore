@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# secrets / key docs — never commit these
+aria_keys_docs.txt
+*_keys_docs.txt
+*.keys.txt
