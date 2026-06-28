@@ -1,70 +1,81 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { validateTwilioSignature, buildVapiTwiML, buildForwardTwiML } from '@/lib/twilio'
-import { findContactByPhone, insertCall } from '@/lib/supabase'
+import { createClient } from '@supabase/supabase-js'
+import twilio from 'twilio'
 import { pushEvent } from '@/lib/pusher'
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
+const VoiceResponse = twilio.twiml.VoiceResponse
+
 export async function POST(req: NextRequest) {
-  const body = await req.text()
-  const params = Object.fromEntries(new URLSearchParams(body))
+  // Twilio sends application/x-www-form-urlencoded
+  const bodyText = await req.text()
+  const params = new URLSearchParams(bodyText)
+  const from: string = params.get('From') ?? ''
+  const callSid: string = params.get('CallSid') ?? ''
 
-  // Validate Twilio signature in production
-  if (process.env.NODE_ENV === 'production') {
-    const signature = req.headers.get('x-twilio-signature') ?? ''
-    const url = `${process.env.NEXT_PUBLIC_BASE_URL}/api/webhook/twilio`
-    if (!validateTwilioSignature(signature, url, params)) {
-      return new NextResponse('Forbidden', { status: 403 })
-    }
-  }
+  // Normalize — strip whatsapp: prefix
+  const normalized = from.replace('whatsapp:', '').trim()
+  const channel: 'phone' | 'whatsapp' = from.startsWith('whatsapp:') ? 'whatsapp' : 'phone'
 
-  const callSid: string = params.CallSid ?? ''
-  let fromRaw: string = params.From ?? ''
-  const to: string = params.To ?? ''
+  console.log('📞 Incoming call from:', normalized, '| SID:', callSid)
 
-  // Detect channel
-  let channel: 'phone' | 'whatsapp' = 'phone'
-  if (fromRaw.startsWith('whatsapp:')) {
-    channel = 'whatsapp'
-    fromRaw = fromRaw.replace('whatsapp:', '')
-  }
+  // Check contacts table
+  const { data: contact, error } = await supabase
+    .from('contacts')
+    .select('*')
+    .eq('phone', normalized)
+    .single()
 
-  // Look up contact
-  const contact = await findContactByPhone(fromRaw)
+  console.log('📒 Contact lookup:', contact?.name ?? 'not found', error?.code ?? '')
 
   // Insert call record
-  const callRecord = await insertCall({
-    call_sid: callSid,
-    vapi_call_id: null,
-    from_number: fromRaw,
-    display_name: contact?.name ?? null,
-    channel,
-    line: null,
-    status: contact ? 'picked_up' : 'ringing',
-    caller_name: contact?.name ?? null,
-    caller_company: null,
-    caller_reason: null,
-    duration_seconds: null,
-    transcript: null,
-    summary: null,
-    recording_url: null,
-    ended_at: null,
-    owner_decision: null,
-  })
+  const { data: callRecord } = await supabase
+    .from('calls')
+    .insert({
+      call_sid: callSid,
+      vapi_call_id: null,
+      from_number: normalized,
+      display_name: contact?.name ?? null,
+      channel,
+      line: null,
+      status: contact ? 'picked_up' : 'ringing',
+      caller_name: contact?.name ?? null,
+      caller_company: null,
+      caller_reason: null,
+      duration_seconds: null,
+      transcript: null,
+      summary: null,
+      recording_url: null,
+      ended_at: null,
+      owner_decision: null,
+    })
+    .select()
+    .single()
+
+  const twiml = new VoiceResponse()
 
   if (contact && callRecord) {
-    // Known contact — push event and forward directly
+    // KNOWN contact — ring owner directly, bypass Aria
+    console.log('✅ Known contact — forwarding to owner')
     await pushEvent({ type: 'INCOMING_KNOWN', call: callRecord })
-    const forwardNumber = process.env.OWNER_FORWARD_NUMBER ?? ''
-    return new NextResponse(buildForwardTwiML(forwardNumber), {
-      headers: { 'Content-Type': 'text/xml' },
+    twiml.dial().number(process.env.OWNER_FORWARD_NUMBER!)
+  } else {
+    // UNKNOWN — send to Aria via Vapi stream
+    console.log('❓ Unknown caller — routing to Aria')
+    if (callRecord) {
+      await pushEvent({ type: 'INCOMING_UNKNOWN', call: callRecord })
+    }
+    const connect = twiml.connect()
+    connect.stream({
+      url: `wss://api.vapi.ai/call/incoming?assistant_id=${process.env.VAPI_ASSISTANT_ID}`,
     })
   }
 
-  if (callRecord) {
-    // Unknown caller — send to Aria via Vapi
-    await pushEvent({ type: 'INCOMING_UNKNOWN', call: callRecord })
-  }
-
-  return new NextResponse(buildVapiTwiML(), {
+  return new NextResponse(twiml.toString(), {
     headers: { 'Content-Type': 'text/xml' },
   })
 }

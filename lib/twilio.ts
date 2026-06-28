@@ -34,3 +34,25 @@ export function buildForwardTwiML(number: string): string {
   <Dial>${number}</Dial>
 </Response>`
 }
+
+export async function sendSMSAlert(params: {
+  callerName: string
+  callerCompany: string
+  callerReason: string
+  callerPhone: string
+  line: string
+}) {
+  const { callerName, callerCompany, callerReason, callerPhone, line } = params
+  const dashboardUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+  const body = `📞 New call from ${callerName} (${callerCompany})
+Reason: ${callerReason}
+Their #: ${callerPhone}
+Line: ${line}
+→ Pick up or voicemail: ${dashboardUrl}`
+
+  return twilioClient.messages.create({
+    body,
+    from: process.env.TWILIO_PHONE_NUMBER!,
+    to: process.env.OWNER_SMS_NUMBER ?? process.env.OWNER_FORWARD_NUMBER!,
+  })
+}
