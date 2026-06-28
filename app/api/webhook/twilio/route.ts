@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     }
     const connect = twiml.connect()
     connect.stream({
-      url: `wss://api.vapi.ai/call/incoming?assistant_id=${process.env.VAPI_ASSISTANT_ID}`,
+      url: `wss://api.vapi.ai/call/incoming?assistant_id=${process.env.VAPI_ASSISTANT_ID}&apiKey=${process.env.VAPI_API_KEY}`,
     })
   }
 
