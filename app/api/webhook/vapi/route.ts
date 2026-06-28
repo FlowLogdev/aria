@@ -51,6 +51,14 @@ export async function POST(req: NextRequest) {
   }
 
   switch (type) {
+    // Vapi sends this when a call comes in to a phone number with a Server URL
+    // Must respond with the assistantId or the call is dropped
+    case 'assistant-request': {
+      return NextResponse.json({
+        assistantId: process.env.VAPI_ASSISTANT_ID,
+      })
+    }
+
     case 'call-started': {
       if (dbCall) {
         const updated = await updateCall(dbCall.id, {
