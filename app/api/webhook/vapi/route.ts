@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { getCallByVapiId, getCallBySid, updateCall, insertCall } from '@/lib/supabase'
 import { pushEvent } from '@/lib/pusher'
 import { sendSMSAlert } from '@/lib/twilio'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 export async function POST(req: NextRequest) {
   const secret = req.headers.get('x-vapi-secret')
@@ -51,12 +57,41 @@ export async function POST(req: NextRequest) {
   }
 
   switch (type) {
-    // Vapi sends this when a call comes in to a phone number with a Server URL
-    // Must respond with the assistantId or the call is dropped
     case 'assistant-request': {
-      return NextResponse.json({
-        assistantId: process.env.VAPI_ASSISTANT_ID,
-      })
+      const callerNumber: string = call?.customer?.number ?? ''
+      if (callerNumber) {
+        const normalized = callerNumber.replace('whatsapp:', '').trim()
+        const { data: contact } = await supabase
+          .from('contacts')
+          .select('name')
+          .eq('phone', normalized)
+          .single()
+
+        if (contact) {
+          // Known contact — return a transfer-only assistant, bypass Aria
+          return NextResponse.json({
+            assistant: {
+              firstMessage: `One moment please, connecting your call now.`,
+              model: {
+                provider: 'anthropic',
+                model: 'claude-haiku-4-5-20251001',
+                messages: [{ role: 'system', content: 'You must immediately call transferCall with destination +' + (process.env.OWNER_FORWARD_NUMBER ?? '').replace('+', '') + '. Do not say anything else.' }],
+              },
+              voice: { provider: 'vapi', voiceId: 'Clara' },
+              tools: [{
+                type: 'transferCall',
+                destinations: [{
+                  type: 'number',
+                  number: process.env.OWNER_FORWARD_NUMBER,
+                  description: 'Owner',
+                }],
+              }],
+            },
+          })
+        }
+      }
+      // Unknown caller — use Aria
+      return NextResponse.json({ assistantId: process.env.VAPI_ASSISTANT_ID })
     }
 
     case 'call-started': {
