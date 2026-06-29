@@ -75,17 +75,17 @@ export async function POST(req: NextRequest) {
               model: {
                 provider: 'anthropic',
                 model: 'claude-haiku-4-5-20251001',
-                messages: [{ role: 'system', content: 'You must immediately call transferCall with destination +' + (process.env.OWNER_FORWARD_NUMBER ?? '').replace('+', '') + '. Do not say anything else.' }],
+                messages: [{ role: 'system', content: 'You must immediately call transferCall. Do not say anything else.' }],
+                tools: [{
+                  type: 'transferCall',
+                  destinations: [{
+                    type: 'number',
+                    number: process.env.OWNER_FORWARD_NUMBER,
+                    description: 'Owner',
+                  }],
+                }],
               },
               voice: { provider: 'vapi', voiceId: 'Clara' },
-              tools: [{
-                type: 'transferCall',
-                destinations: [{
-                  type: 'number',
-                  number: process.env.OWNER_FORWARD_NUMBER,
-                  description: 'Owner',
-                }],
-              }],
             },
           })
         }
