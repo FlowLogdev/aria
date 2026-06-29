@@ -68,14 +68,17 @@ export async function POST(req: NextRequest) {
           .single()
 
         if (contact) {
-          // Known contact — return a transfer-only assistant, bypass Aria
+          // Known contact — no firstMessage so Vapi calls the LLM immediately on connect
+          // LLM's first turn calls transferCall before waiting for user input
           return NextResponse.json({
             assistant: {
-              firstMessage: `One moment please, connecting your call now.`,
               model: {
                 provider: 'anthropic',
                 model: 'claude-haiku-4-5-20251001',
-                messages: [{ role: 'system', content: 'You must immediately call transferCall. Do not say anything else.' }],
+                messages: [{
+                  role: 'system',
+                  content: 'Call the transferCall tool immediately. Do not greet. Do not wait. Do not speak. Just call transferCall now.',
+                }],
                 tools: [{
                   type: 'transferCall',
                   destinations: [{
@@ -86,6 +89,7 @@ export async function POST(req: NextRequest) {
                 }],
               },
               voice: { provider: 'vapi', voiceId: 'Clara' },
+              firstMessageMode: 'assistant-speaks-first-with-model-generated-message',
             },
           })
         }
