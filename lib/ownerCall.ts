@@ -94,23 +94,28 @@ export async function bridgeCallerToOwner(call: Call) {
 export async function sendCallerToVoicemail(call: Call, origin: string) {
   const controlUrl = await getVapiControlUrl(call.vapi_call_id)
   if (controlUrl) {
-    const res = await fetch(controlUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'add-message',
-        message: {
-          role: 'system',
-          content:
-            'Fabio is not available to take this call right now. Politely tell the caller he is unavailable, ' +
-            'then take a voicemail: ask them for the message they would like to leave and confirm the best number to reach them. ' +
-            'Let them know Fabio will get back to them, thank them, and say goodbye.',
-        },
-        triggerResponseEnabled: true,
-      }),
-    })
-    if (res.ok) return
-    console.error('[OWNER-CALL] Vapi control add-message failed', res.status, await res.text())
+    try {
+      const res = await fetch(controlUrl, {
+        signal: AbortSignal.timeout(5000),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'add-message',
+          message: {
+            role: 'system',
+            content:
+              'Fabio is not available to take this call right now. Politely tell the caller he is unavailable, ' +
+              'then take a voicemail: ask them for the message they would like to leave and confirm the best number to reach them. ' +
+              'Do not call checkAvailability again. Let them know Fabio will get back to them, thank them, and say goodbye.',
+          },
+          triggerResponseEnabled: true,
+        }),
+      })
+      if (res.ok) return
+      console.error('[OWNER-CALL] Vapi control add-message failed', res.status)
+    } catch (err) {
+      console.error('[OWNER-CALL] Vapi control unavailable; using recorded voicemail', err)
+    }
   }
 
   if (!call.call_sid) return
@@ -129,6 +134,7 @@ async function getVapiControlUrl(vapiCallId: string | null): Promise<string | nu
   if (!vapiCallId || !process.env.VAPI_API_KEY) return null
   try {
     const res = await fetch(`https://api.vapi.ai/call/${vapiCallId}`, {
+      signal: AbortSignal.timeout(5000),
       headers: { Authorization: `Bearer ${process.env.VAPI_API_KEY}` },
     })
     if (!res.ok) return null

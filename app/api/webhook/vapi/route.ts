@@ -137,8 +137,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Vapi sends tool-calls (plural) for custom tools
+    case 'function-call':
     case 'tool-calls': {
-      const toolCallList = event.toolCallList ?? []
+      const legacy = type === 'function-call'
+      const toolCallList = legacy
+        ? [{ function: { name: event.functionCall?.name, arguments: event.functionCall?.parameters ?? event.functionCall?.arguments } }]
+        : event.toolCallList ?? []
       for (const toolCall of toolCallList) {
         const fnName: string = toolCall.function?.name ?? ''
         let fnArgs: Record<string, string> = {}
@@ -200,45 +204,14 @@ export async function POST(req: NextRequest) {
           // SMS alert to owner (written backup of the caller's details)
           sendSMSAlert({ callerName, callerCompany, callerPhone, callerReason, line: resolvedLine }).catch(() => {})
 
-          // Respond to Vapi with the tool result — tells Aria to hold
-          return NextResponse.json({
-            results: [{
-              toolCallId: toolCall.id,
-              result: ownerCalled
-                ? "You are now calling Fabio to see if he can take this call. Tell the caller you're trying to reach him and ask them to please hold. Do not end the call — keep the caller on hold until you are told what to do next."
-                : "Fabio could not be reached right now. Tell the caller he is unavailable and take a message: ask what message they'd like to leave and confirm the best number to reach them.",
-            }],
-          })
+          // Both Vapi tool formats must ring the owner and return instructions to the assistant.
+          const result = ownerCalled
+            ? "You are now calling Fabio to see if he can take this call. Tell the caller you're trying to reach him and ask them to please hold. Do not call checkAvailability again. Do not end the call — keep the caller on hold until you are told what to do next."
+            : "Fabio could not be reached right now. Tell the caller he is unavailable and take a message: ask what message they'd like to leave and confirm the best number to reach them. Do not call checkAvailability again."
+          return NextResponse.json(legacy
+            ? { result }
+            : { results: [{ toolCallId: toolCall.id, result }] })
         }
-      }
-      break
-    }
-
-    // Legacy function-call support
-    case 'function-call': {
-      const fnName: string = event.functionCall?.name ?? ''
-      const fnArgs = event.functionCall?.parameters ?? event.functionCall?.arguments ?? {}
-      if (fnName === 'checkAvailability') {
-        const { callerName = '', callerCompany = '', callerPhone = '', callerReason = '', line = 'business' } = fnArgs
-        if (dbCall) {
-          await updateCall(dbCall.id, {
-            status: 'holding',
-            caller_name: callerName,
-            caller_company: callerCompany,
-            caller_reason: callerReason,
-            line,
-          })
-          await pushEvent({
-            type: 'CALLER_INFO_READY',
-            callId: dbCall.id,
-            callerName,
-            callerCompany,
-            callerPhone,
-            callerReason,
-            line,
-          })
-        }
-        return NextResponse.json({ result: 'holding' })
       }
       break
     }
