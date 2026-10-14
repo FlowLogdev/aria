@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getCallByVapiId, getCallBySid, updateCall, insertCall } from '@/lib/supabase'
 import { pushEvent } from '@/lib/pusher'
 import { sendSMSAlert } from '@/lib/twilio'
+import { callOwner, publicOrigin } from '@/lib/ownerCall'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -94,8 +95,23 @@ export async function POST(req: NextRequest) {
           })
         }
       }
-      // Unknown caller — use Aria
-      return NextResponse.json({ assistantId: process.env.VAPI_ASSISTANT_ID })
+      // Unknown caller — use Aria. Overrides keep the caller on hold while Aria rings the owner,
+      // and enable live call control so the owner's "press 2" can hand the call back to Aria for voicemail.
+      return NextResponse.json({
+        assistantId: process.env.VAPI_ASSISTANT_ID,
+        assistantOverrides: {
+          silenceTimeoutSeconds: 180,
+          monitorPlan: { controlEnabled: true },
+          messagePlan: {
+            idleMessages: [
+              "Thanks for holding, I'm still trying to reach him.",
+              'Still connecting you, thank you for your patience.',
+            ],
+            idleTimeoutSeconds: 15,
+            idleMessageMaxSpokenCount: 6,
+          },
+        },
+      })
     }
 
     case 'call-started': {
@@ -165,14 +181,32 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          // SMS alert to owner
+          // Make sure we have the caller's Twilio CallSid — needed to bridge them to the owner
+          if (dbCall && !dbCall.call_sid && callSid) {
+            await updateCall(dbCall.id, { call_sid: callSid })
+          }
+
+          // Ring the owner: Aria announces the caller, owner presses 1 (connect) or 2 (voicemail)
+          let ownerCalled = false
+          if (dbCall) {
+            try {
+              await callOwner(dbCall.id, publicOrigin(req))
+              ownerCalled = true
+            } catch (err) {
+              console.error('[VAPI] failed to call owner', err)
+            }
+          }
+
+          // SMS alert to owner (written backup of the caller's details)
           sendSMSAlert({ callerName, callerCompany, callerPhone, callerReason, line: resolvedLine }).catch(() => {})
 
           // Respond to Vapi with the tool result — tells Aria to hold
           return NextResponse.json({
             results: [{
               toolCallId: toolCall.id,
-              result: 'The owner has been notified and is checking availability. Please ask the caller to hold the line and play a brief hold message every 15 seconds.',
+              result: ownerCalled
+                ? "You are now calling Fabio to see if he can take this call. Tell the caller you're trying to reach him and ask them to please hold. Do not end the call — keep the caller on hold until you are told what to do next."
+                : "Fabio could not be reached right now. Tell the caller he is unavailable and take a message: ask what message they'd like to leave and confirm the best number to reach them.",
             }],
           })
         }
