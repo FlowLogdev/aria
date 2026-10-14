@@ -4,6 +4,7 @@ import { getCallByVapiId, getCallBySid, updateCall, insertCall } from '@/lib/sup
 import { pushEvent } from '@/lib/pusher'
 import { sendSMSAlert } from '@/lib/twilio'
 import { callOwner, publicOrigin } from '@/lib/ownerCall'
+import { screeningOverrides } from '@/lib/screeningAssistant'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,7 +18,6 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  console.log('[VAPI]', JSON.stringify(body, null, 2))
 
   // Vapi wraps events in a "message" field
   const event = body.message ?? body
@@ -99,18 +99,7 @@ export async function POST(req: NextRequest) {
       // and enable live call control so the owner's "press 2" can hand the call back to Aria for voicemail.
       return NextResponse.json({
         assistantId: process.env.VAPI_ASSISTANT_ID,
-        assistantOverrides: {
-          silenceTimeoutSeconds: 180,
-          monitorPlan: { controlEnabled: true },
-          messagePlan: {
-            idleMessages: [
-              "Thanks for holding, I'm still trying to reach him.",
-              'Still connecting you, thank you for your patience.',
-            ],
-            idleTimeoutSeconds: 15,
-            idleMessageMaxSpokenCount: 6,
-          },
-        },
+        assistantOverrides: screeningOverrides(call?.customer?.number ?? ''),
       })
     }
 
@@ -194,7 +183,8 @@ export async function POST(req: NextRequest) {
           let ownerCalled = false
           if (dbCall) {
             try {
-              await callOwner(dbCall.id, publicOrigin(req))
+              const ownerCall = await callOwner(dbCall.id, publicOrigin(req))
+              console.log('[VAPI] owner call requested', { callId: dbCall.id, ownerCallSid: ownerCall.sid, status: ownerCall.status })
               ownerCalled = true
             } catch (err) {
               console.error('[VAPI] failed to call owner', err)
