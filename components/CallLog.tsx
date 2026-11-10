@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, Phone, MessageSquare } from 'lucide-react'
+import { ChevronDown, ChevronUp, Phone, MessageSquare, Play } from 'lucide-react'
 import { StatusBadge } from './StatusBadge'
 import type { Call } from '@/lib/supabase'
 
@@ -16,6 +16,45 @@ function fmtTime(iso: string): string {
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function RecordingPlayer({ callId }: { callId: string }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function load() {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/calls/${callId}/recording`)
+      const body = await res.json().catch(() => null)
+      if (res.ok && body?.url) setUrl(body.url)
+      else setError(res.status === 404 ? 'No recording for this call.' : 'Could not load the recording. Try again.')
+    } catch {
+      setError('Could not load the recording. Try again.')
+    }
+    setLoading(false)
+  }
+
+  if (url) {
+    return <audio controls autoPlay src={url} onError={() => { setUrl(null); setError('The recording could not be played. Try again.') }} className="w-full max-w-md" />
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={load}
+        disabled={loading}
+        className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+      >
+        <Play className="w-3.5 h-3.5" />
+        {loading ? 'Loading…' : 'Play recording'}
+      </button>
+      {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
+    </div>
+  )
 }
 
 function CallRow({ call }: { call: Call }) {
@@ -54,6 +93,7 @@ function CallRow({ call }: { call: Call }) {
         <tr className="border-b border-zinc-800/50 bg-zinc-900/20">
           <td colSpan={7} className="px-4 py-4">
             <div className="flex flex-col gap-3">
+              {(call.vapi_call_id || call.recording_url) && <RecordingPlayer callId={call.id} />}
               {summary && (
                 <div className="rounded-lg border border-indigo-500/20 bg-indigo-950/20 p-3 text-sm">
                   <p className="text-indigo-300 font-medium mb-1">{summary.intent}</p>
