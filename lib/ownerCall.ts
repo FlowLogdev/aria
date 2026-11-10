@@ -141,7 +141,7 @@ export async function sendCallerToVoicemail(call: Call, origin: string) {
           message: {
             role: 'system',
             content:
-              'The team is not available to take this call right now. Never say any team member's name. Politely tell the caller the team is unavailable, ' +
+              'The team is not available to take this call right now. Never say the name of any team member. Politely tell the caller the team is unavailable, ' +
               'then take a voicemail: ask them for the message they would like to leave and confirm the best number to reach them. ' +
               'Do not call checkAvailability again. Let them know our team will get back to them, thank them, and say goodbye.',
           },
