@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Aria",
+    "slug": "aria-voicemail",
+    "owner": "rankcore",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.rj40f.ariavoicemail",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false
+        }
+      ],
+      "expo-asset"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "09be357c-8722-4d96-8fa0-051cf24ed1da"
+      }
+    }
+  }
+}

@@ -16,6 +16,11 @@ async function vapiRequest(path: string, method: string, body?: object) {
   return res.json()
 }
 
+export async function getCallRecordingUrl(vapiCallId: string): Promise<string | null> {
+  const call = await vapiRequest(`/call/${vapiCallId}`, 'GET')
+  return call?.artifact?.presignedMonoUrl ?? call?.artifact?.recordingUrl ?? null
+}
+
 export async function transferCall(vapiCallId: string, toNumber: string) {
   return vapiRequest(`/call/${vapiCallId}/transfer`, 'POST', {
     destination: { type: 'number', number: toNumber },

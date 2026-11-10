@@ -3,6 +3,7 @@
 export function screeningOverrides(callbackNumber: string) {
   const callback = /^\+\d{8,15}$/.test(callbackNumber) ? callbackNumber : 'unknown'
   return {
+    firstMessage: 'Thank you for calling RankCore Global. This is Aria, and this call may be recorded. How may I help you today?',
     silenceTimeoutSeconds: 120,
     monitorPlan: { controlEnabled: true },
     messagePlan: {
