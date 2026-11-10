@@ -9,11 +9,17 @@ const same = (a: string, b: string) => timingSafeEqual(digest(a), digest(b))
 const sign = (expiresAt: string, password: string) =>
   createHmac('sha256', password).update(`aria-dashboard:${expiresAt}`).digest('hex')
 
-// Fails closed if DASHBOARD_PASSWORD isn't configured.
-export function isCorrectPassword(candidate: unknown): boolean {
+const normalizeEmail = (value: string) => value.trim().toLowerCase()
+
+// Fails closed if DASHBOARD_EMAIL or DASHBOARD_PASSWORD isn't configured.
+export function isCorrectLogin(email: unknown, candidate: unknown): boolean {
+  const expectedEmail = process.env.DASHBOARD_EMAIL
   const password = process.env.DASHBOARD_PASSWORD
-  if (!password || typeof candidate !== 'string') return false
-  return same(candidate, password)
+  if (!expectedEmail || !password) return false
+  if (typeof email !== 'string' || typeof candidate !== 'string') return false
+  const emailMatches = same(normalizeEmail(email), normalizeEmail(expectedEmail))
+  const passwordMatches = same(candidate, password)
+  return emailMatches && passwordMatches
 }
 
 export function createSessionValue(): string {

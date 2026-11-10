@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react'
 
 export default function LoginPage() {
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -15,13 +16,13 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ email, password }),
       })
       if (res.ok) {
         window.location.assign('/')
         return
       }
-      setError('Incorrect password.')
+      setError('Incorrect email or password.')
     } catch {
       setError('Could not reach the server. Try again.')
     }
@@ -33,11 +34,22 @@ export default function LoginPage() {
       <form onSubmit={submit} className="w-full max-w-sm space-y-4">
         <h1 className="text-xl font-semibold text-white">Aria</h1>
         <label className="block text-sm text-gray-300">
+          Email
+          <input
+            type="email"
+            autoComplete="username"
+            autoFocus
+            required
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            className="mt-1 w-full rounded-lg bg-gray-900 border border-gray-700 px-3 py-2 text-white"
+          />
+        </label>
+        <label className="block text-sm text-gray-300">
           Password
           <input
             type="password"
             autoComplete="current-password"
-            autoFocus
             required
             value={password}
             onChange={e => setPassword(e.target.value)}

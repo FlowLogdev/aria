@@ -3,14 +3,14 @@ import {
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
   createSessionValue,
-  isCorrectPassword,
+  isCorrectLogin,
 } from '@/lib/dashboardAuth'
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
 
-  if (!isCorrectPassword(body?.password)) {
-    return NextResponse.json({ error: 'Incorrect password' }, { status: 401 })
+  if (!isCorrectLogin(body?.email, body?.password)) {
+    return NextResponse.json({ error: 'Incorrect email or password' }, { status: 401 })
   }
 
   const res = NextResponse.json({ success: true })
