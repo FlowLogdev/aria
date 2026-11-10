@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getCallByVapiId, getCallBySid, updateCall, insertCall } from '@/lib/supabase'
 import { pushEvent } from '@/lib/pusher'
 import { sendSMSAlert } from '@/lib/twilio'
-import { callOwner, publicOrigin } from '@/lib/ownerCall'
+import { callOwner, finishOwnerBridge, publicOrigin } from '@/lib/ownerCall'
 import { screeningOverrides } from '@/lib/screeningAssistant'
 
 const supabase = createClient(
@@ -223,6 +223,11 @@ export async function POST(req: NextRequest) {
         })
         if (updated) {
           await pushEvent({ type: 'CALL_ENDED', callId: updated.id, duration: durationSeconds })
+        }
+        if (type === 'end-of-call-report' && dbCall.owner_decision === 'pickup') {
+          const endedReason: string = event.endedReason ?? call?.endedReason ?? ''
+          console.log('[VAPI] finishing owner bridge', { callId: dbCall.id, endedReason })
+          await finishOwnerBridge(dbCall, endedReason).catch(err => console.error('[VAPI] owner bridge failed', err))
         }
       }
       break

@@ -6,6 +6,7 @@ import {
   announcementTwiml,
   claimDecision,
   transferCallerToOwner,
+  ownerWaitingTwiml,
   sendCallerToVoicemail,
   sayAndHangup,
 } from '@/lib/ownerCall'
@@ -46,8 +47,7 @@ export async function POST(req: NextRequest) {
         if (!claimed) return twimlResponse(sayAndHangup('This call was already handled.'))
         try {
           await transferCallerToOwner(claimed)
-          // Hang up with no speech so the owner's line is free for the transfer to ring it.
-          return twimlResponse(sayAndHangup(''))
+          return twimlResponse(ownerWaitingTwiml(claimed.id))
         } catch (err) {
           console.error('[OWNER-CALL] transfer failed', err)
           await sendCallerToVoicemail(claimed, origin).catch(e => console.error('[OWNER-CALL] voicemail failed', e))

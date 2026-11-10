@@ -49,7 +49,7 @@ export function announcementTwiml(call: Call, origin: string) {
     action: `${origin}/api/webhook/owner-call?callId=${call.id}&step=decide`,
   })
   gather.say({ voice: VOICE }, `Hi, this is Aria. You have a call from ${name}${company}${reason}.`)
-  gather.say({ voice: VOICE }, 'Press 1 to take the call, and your phone will ring right back to connect you. Press 2 to send them to voicemail.')
+  gather.say({ voice: VOICE }, 'Press 1 to take the call. Press 2 to send them to voicemail.')
   // One repeat, then treat silence as "send to voicemail"
   const again = twiml.gather({
     numDigits: 1,
@@ -73,9 +73,43 @@ export async function claimDecision(callId: string, decision: 'pickup' | 'voicem
   return data as Call | null
 }
 
-// Press 1: have Vapi transfer the caller to the owner. Vapi owns this phone leg, so redirecting it
-// through Twilio directly drops the call. The spoken message delays the transfer long enough for
-// the announcement leg to hang up, so the owner's line is free when the transfer rings it.
+function conferenceTwiml(callId: string, greeting?: string) {
+  const twiml = new VoiceResponse()
+  if (greeting) twiml.say({ voice: VOICE }, greeting)
+  twiml.dial().conference(
+    { startConferenceOnEnter: true, endConferenceOnExit: true, beep: 'false' },
+    `aria-${callId}`,
+  )
+  return twiml
+}
+
+// Press 1, owner side: keep the owner on this same call, waiting in the conference.
+export function ownerWaitingTwiml(callId: string) {
+  return conferenceTwiml(callId, 'Connecting you now. One moment.')
+}
+
+// Vapi's forward has released the caller's leg, so it can now safely join the owner's conference.
+// Redirecting it any earlier drops the call, because Vapi hangs up a leg it still owns.
+// If the forward didn't happen, end the conference so the owner isn't left waiting alone.
+export async function finishOwnerBridge(call: Call, endedReason: string) {
+  if (endedReason === 'assistant-forwarded-call' && call.call_sid) {
+    try {
+      await twilioClient.calls(call.call_sid).update({ twiml: conferenceTwiml(call.id).toString() })
+      return
+    } catch (err) {
+      console.error('[OWNER-CALL] could not move caller into conference', err)
+    }
+  }
+  console.error('[OWNER-CALL] bridge not completed', { callId: call.id, endedReason })
+  const [conference] = await twilioClient.conferences.list({
+    friendlyName: `aria-${call.id}`,
+    status: 'in-progress',
+    limit: 1,
+  })
+  if (conference) await twilioClient.conferences(conference.sid).update({ status: 'completed' })
+}
+
+// Press 1, caller side: ask Vapi to forward the caller, which releases the leg from Vapi.
 export async function transferCallerToOwner(call: Call) {
   const controlUrl = await getVapiControlUrl(call.vapi_call_id)
   if (!controlUrl) throw new Error('No Vapi control URL for caller')
@@ -86,7 +120,7 @@ export async function transferCallerToOwner(call: Call) {
     body: JSON.stringify({
       type: 'transfer',
       destination: { type: 'number', number: process.env.OWNER_FORWARD_NUMBER },
-      content: 'Thank you for holding. Please stay on the line while I connect you now.',
+      content: 'Connecting you now.',
     }),
   })
   if (!res.ok) throw new Error(`Vapi control transfer failed: ${res.status}`)
