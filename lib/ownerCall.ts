@@ -49,7 +49,7 @@ export function announcementTwiml(call: Call, origin: string) {
     action: `${origin}/api/webhook/owner-call?callId=${call.id}&step=decide`,
   })
   gather.say({ voice: VOICE }, `Hi, this is Aria. You have a call from ${name}${company}${reason}.`)
-  gather.say({ voice: VOICE }, 'Press 1 to take the call. Press 2 to send them to voicemail.')
+  gather.say({ voice: VOICE }, 'Press 1 to take the call, and your phone will ring right back to connect you. Press 2 to send them to voicemail.')
   // One repeat, then treat silence as "send to voicemail"
   const again = twiml.gather({
     numDigits: 1,
@@ -73,20 +73,23 @@ export async function claimDecision(callId: string, decision: 'pickup' | 'voicem
   return data as Call | null
 }
 
-function conferenceTwiml(callId: string) {
-  const twiml = new VoiceResponse()
-  twiml.dial().conference(
-    { startConferenceOnEnter: true, endConferenceOnExit: true, beep: 'false' },
-    `aria-${callId}`,
-  )
-  return twiml
-}
-
-// Press 1: pull the caller's leg off the Vapi stream into a conference; the owner joins it too.
-export async function bridgeCallerToOwner(call: Call) {
-  if (!call.call_sid) throw new Error('No Twilio CallSid for caller')
-  await twilioClient.calls(call.call_sid).update({ twiml: conferenceTwiml(call.id).toString() })
-  return conferenceTwiml(call.id)
+// Press 1: have Vapi transfer the caller to the owner. Vapi owns this phone leg, so redirecting it
+// through Twilio directly drops the call. The spoken message delays the transfer long enough for
+// the announcement leg to hang up, so the owner's line is free when the transfer rings it.
+export async function transferCallerToOwner(call: Call) {
+  const controlUrl = await getVapiControlUrl(call.vapi_call_id)
+  if (!controlUrl) throw new Error('No Vapi control URL for caller')
+  const res = await fetch(controlUrl, {
+    signal: AbortSignal.timeout(5000),
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'transfer',
+      destination: { type: 'number', number: process.env.OWNER_FORWARD_NUMBER },
+      content: 'Thank you for holding. Please stay on the line while I connect you now.',
+    }),
+  })
+  if (!res.ok) throw new Error(`Vapi control transfer failed: ${res.status}`)
 }
 
 // Press 2 (or no answer): have Aria take a message. Falls back to a Twilio-recorded voicemail

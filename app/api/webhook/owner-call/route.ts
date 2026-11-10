@@ -5,7 +5,7 @@ import {
   twimlResponse,
   announcementTwiml,
   claimDecision,
-  bridgeCallerToOwner,
+  transferCallerToOwner,
   sendCallerToVoicemail,
   sayAndHangup,
 } from '@/lib/ownerCall'
@@ -45,10 +45,13 @@ export async function POST(req: NextRequest) {
         const claimed = await claimDecision(call.id, 'pickup')
         if (!claimed) return twimlResponse(sayAndHangup('This call was already handled.'))
         try {
-          return twimlResponse(await bridgeCallerToOwner(claimed))
+          await transferCallerToOwner(claimed)
+          // Hang up with no speech so the owner's line is free for the transfer to ring it.
+          return twimlResponse(sayAndHangup(''))
         } catch (err) {
-          console.error('[OWNER-CALL] bridge failed', err)
-          return twimlResponse(sayAndHangup('Sorry, the caller is no longer on the line.'))
+          console.error('[OWNER-CALL] transfer failed', err)
+          await sendCallerToVoicemail(claimed, origin).catch(e => console.error('[OWNER-CALL] voicemail failed', e))
+          return twimlResponse(sayAndHangup('Sorry, I could not connect the caller, so I will take a message.'))
         }
       }
       const claimed = await claimDecision(call.id, 'voicemail')
