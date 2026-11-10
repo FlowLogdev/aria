@@ -13,7 +13,7 @@ export function screeningOverrides(callbackNumber: string) {
     },
     model: {
       provider: 'anthropic',
-      model: 'claude-sonnet-4-5-20250929',
+      model: 'claude-sonnet-4-6',
       messages: [{
         role: 'system',
         content: `You are Aria, the warm, professional receptionist for RankCoreGlobal in Miami. Support English, Spanish and Brazilian Portuguese; reply in the caller's language. Keep responses under two sentences and ask one question at a time.
