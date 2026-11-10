@@ -10,7 +10,8 @@ export const pusherServer = new Pusher({
   useTLS: true,
 })
 
-export const ARIA_CHANNEL = 'aria-calls'
+// The private- prefix makes Pusher require /api/pusher/auth before a client can subscribe.
+export const ARIA_CHANNEL = 'private-aria-calls'
 
 export type PusherEvent =
   | { type: 'INCOMING_KNOWN'; call: import('./supabase').Call }
@@ -31,6 +32,7 @@ export function getPusherClient(): PusherJS {
   if (!pusherClient) {
     pusherClient = new PusherJS(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
       cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
+      channelAuthorization: { endpoint: '/api/pusher/auth', transport: 'ajax' },
     })
   }
   return pusherClient
