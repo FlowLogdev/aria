@@ -141,9 +141,9 @@ export async function sendCallerToVoicemail(call: Call, origin: string) {
           message: {
             role: 'system',
             content:
-              'Fabio is not available to take this call right now. Politely tell the caller he is unavailable, ' +
+              'The team is not available to take this call right now. Never say any team member's name. Politely tell the caller the team is unavailable, ' +
               'then take a voicemail: ask them for the message they would like to leave and confirm the best number to reach them. ' +
-              'Do not call checkAvailability again. Let them know Fabio will get back to them, thank them, and say goodbye.',
+              'Do not call checkAvailability again. Let them know our team will get back to them, thank them, and say goodbye.',
           },
           triggerResponseEnabled: true,
         }),
@@ -157,7 +157,7 @@ export async function sendCallerToVoicemail(call: Call, origin: string) {
 
   if (!call.call_sid) return
   const twiml = new VoiceResponse()
-  twiml.say({ voice: VOICE }, "Sorry, Fabio isn't available right now. Please leave a message after the tone and he will get back to you.")
+  twiml.say({ voice: VOICE }, "Sorry, our team isn't available right now. Please leave a message after the tone and we will get back to you.")
   twiml.record({
     maxLength: 120,
     playBeep: true,

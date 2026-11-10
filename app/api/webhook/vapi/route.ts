@@ -196,8 +196,8 @@ export async function POST(req: NextRequest) {
 
           // Both Vapi tool formats must ring the owner and return instructions to the assistant.
           const result = ownerCalled
-            ? "You are now calling Fabio to see if he can take this call. Tell the caller you're trying to reach him and ask them to please hold. Do not call checkAvailability again. Do not end the call — keep the caller on hold until you are told what to do next."
-            : "Fabio could not be reached right now. Tell the caller he is unavailable and take a message: ask what message they'd like to leave and confirm the best number to reach them. Do not call checkAvailability again."
+            ? "You are now trying a team member to see if they can take this call. Tell the caller you're trying to reach a team member and ask them to please hold. Never say any team member's name. Do not call checkAvailability again. Do not end the call — keep the caller on hold until you are told what to do next."
+            : "The team member could not be reached right now. Tell the caller the team is unavailable and take a message without saying any team member's name: ask what message they'd like to leave and confirm the best number to reach them. Do not call checkAvailability again."
           return NextResponse.json(legacy
             ? { result }
             : { results: [{ toolCallId: toolCall.id, result }] })
